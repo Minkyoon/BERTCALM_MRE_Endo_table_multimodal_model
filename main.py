@@ -114,7 +114,7 @@ def test(model, test_loader, fold):
     cm = confusion_matrix(all_labels, all_predictions)
     roc = roc_auc_score(all_labels, all_predictions)
 
-    with open(f'test_metrics{fold}.txt', 'w') as f:
+    with open(f'test_metrics{fold}_lr_0.001.txt', 'w') as f:
         f.write(f'Accuracy: {accuracy}\n')
         f.write(f'Sensitivity: {sensitivity}\n')
         f.write(f'Specificity: {specificity}\n')
@@ -148,7 +148,7 @@ def main():
         mre_model = CLAM_mre()   # MRE 이미지 모델
         model = MultimodalModel(endo_model=endo_model,mre_model=mre_model,instance_loss_fn=instance_loss_fn)
         model=model.to(device)
-        optimizer = torch.optim.Adam(model.parameters(), lr=0.00001)
+        optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
         criterion = torch.nn.CrossEntropyLoss()
         
 
