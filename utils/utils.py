@@ -1,3 +1,4 @@
+import random
 import pickle
 import torch
 import numpy as np
@@ -167,3 +168,17 @@ def initialize_weights(module):
 			nn.init.constant_(m.weight, 1)
 			nn.init.constant_(m.bias, 0)
 
+
+
+
+
+def set_seeds(seed_value=42):
+    """Set seeds for reproducibility."""
+    random.seed(seed_value)  # Python random module
+    np.random.seed(seed_value)  # Numpy module
+    torch.manual_seed(seed_value)  # PyTorch
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed_value)
+        torch.cuda.manual_seed_all(seed_value)  # if using multi-GPU
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False

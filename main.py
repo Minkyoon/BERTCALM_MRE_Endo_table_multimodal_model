@@ -1,15 +1,42 @@
 import torch
+from torch.nn.functional import softmax
 from model_clam import  MultimodalModel, CLAM_mre, CLAM_endo
 from torch.utils.data import Dataset, DataLoader
 from dataset import PTFilesDataset
 import os
 import pandas as pd
 from utils.topk.svm import SmoothTop1SVM
+from utils.utils import set_seeds
 from sklearn.metrics import confusion_matrix, f1_score, roc_auc_score, accuracy_score, precision_score, recall_score
 import numpy as np
+import pickle
+import random
 
-num_epochs=100
+
+
+
+num_epochs=2
 device='cuda:3'
+
+def save_results_to_pkl(test_data, predict_proba, predicted, output_path):
+    """
+    Save results as a dictionary in pkl format.
+    
+    Parameters:
+    - test_data: DataFrame that contains the test data.
+    - predict_proba: 2D array-like where the right column has the probability of label being 1.
+    - predicted: 1D array-like, the predicted labels.
+    - output_path: The path where to save the pkl file.
+    """
+    results_dict = {}
+    for idx, slide_id in enumerate(test_data['slide_id'].values):
+        results_dict[slide_id] = {
+            'slide_id': slide_id,
+            'prob': predict_proba[idx],
+            'label': predicted[idx]
+        }
+    with open(output_path, 'wb') as file:
+        pickle.dump(results_dict, file)
 
 def create_datasets_for_fold(split_file, pt_directory, mre_directory, label_csv, tabular_csv, mre_endo_csv):
     splits = pd.read_csv(split_file)
@@ -48,9 +75,9 @@ def train(model, train_loader, optimizer, criterion):
         
   
         
-        bag_weight=0.7
+        bag_weight=1.7
         
-        total_loss = bag_weight*loss + (1-bag_weight)*instance_loss_endo + 0.3*instance_loss_mre
+        total_loss = 1.7*loss + 0.3*instance_loss_endo + 0.3*instance_loss_mre
         
 
         # 역전파
@@ -82,14 +109,17 @@ def validate(model, val_loader, criterion):
             instance_loss_mre = results_dict_mre['instance_loss']
 
             bag_weight = 0.7
-            total_loss += bag_weight * loss + (1 - bag_weight) * instance_loss_endo + 0.3 * instance_loss_mre
+            total_loss += 1.7 * loss + 0.3 * instance_loss_endo + 0.3 * instance_loss_mre
 
     return total_loss / len(val_loader)
 
-def test(model, test_loader, fold):
+def test(model, test_loader, fold, split_file,  results_dir):
     model.eval()
     all_labels = []
     all_predictions = []
+    Y_prob = []
+
+    test_ids = pd.read_csv(split_file)['test'].dropna().astype(int).tolist()
     with torch.no_grad():
         for batch in test_loader:
             endo_data, mre_data, tabular_data, labels = batch
@@ -101,20 +131,27 @@ def test(model, test_loader, fold):
             labels = labels.to(device)
 
             logits, _, _ = model(endo_data, mre_data, tabular_data, label=labels)
+            probabilities = softmax(logits, dim=1)  # 로짓을 확률로 변환
+            Y_prob.extend(probabilities.cpu().numpy())
             _, predicted = torch.max(logits, 1)
 
             all_labels.extend(labels.cpu().numpy())
             all_predictions.extend(predicted.cpu().numpy())
 
+
+
     # 계산된 메트릭스를 저장합니다.
+    predict_proba = [prob[1] for prob in Y_prob] 
     accuracy = accuracy_score(all_labels, all_predictions)
     sensitivity = recall_score(all_labels, all_predictions)
     specificity = recall_score(all_labels, all_predictions, pos_label=0)
     f1 = f1_score(all_labels, all_predictions)
     cm = confusion_matrix(all_labels, all_predictions)
-    roc = roc_auc_score(all_labels, all_predictions)
+    roc = roc_auc_score(all_labels, predict_proba )
 
-    with open(f'test_metrics{fold}_lr_0.001.txt', 'w') as f:
+    output_path = os.path.join(results_dir, f'test_results_fold_{fold}.txt')
+
+    with open(output_path, 'w') as f:
         f.write(f'Accuracy: {accuracy}\n')
         f.write(f'Sensitivity: {sensitivity}\n')
         f.write(f'Specificity: {specificity}\n')
@@ -122,12 +159,33 @@ def test(model, test_loader, fold):
         f.write(f'Confusion Matrix: \n{cm}\n')
         f.write(f'ROC AUC Score: {roc}\n')
 
+    # Save results to pkl
+    test_data = pd.DataFrame({'slide_id': test_ids})
+    predict_proba = [prob[1] for prob in Y_prob]  # Assuming Y_prob is probability output
+    #predicted = all_predictions
+    predicted = all_labels
+    output_pkl_path = os.path.join(results_dir, f'test_results_fold_{fold}.pkl')
+    save_results_to_pkl(test_data, predict_proba, predicted, output_pkl_path)
+
+    
+
     return accuracy
     
 
 def main():
+    set_seeds(42)
+    folder_name = "learning_rate_0.0001_weight1.7"  # Replace with your desired folder name
+    results_dir = f'./results/{folder_name}'
+
+    
+
+    if not os.path.exists(results_dir):
+        os.makedirs(results_dir)
+
+
+
     for fold in range(10):  # 10 폴드
-        split_file = f'/home/minkyoon/2023_CLAM_MUTLIMODAL/data/10fold_csv/splits_{fold}.csv'
+        split_file = f'/home/minkyoon/2023_CLAM_MUTLIMODAL/data/10fold_csv2/splits_{fold}.csv'
         train_dataset, val_dataset, test_dataset = create_datasets_for_fold(
             split_file,
             pt_directory='/home/minkyoon/CLAM3/data/raw/feature_from_resnet/pt_files',
@@ -155,13 +213,35 @@ def main():
 
         # 훈련 및 검증 로직
         # 예: 각 에포크마다 훈련 및 검증 수행
+
+        best_val_loss = float('inf')
+        epochs_no_improve = 0
+        patience = 20  # Set your patience level
+
         for epoch in range(num_epochs):
             print(f'epoch:{epoch}')
             train(model, train_loader, optimizer, criterion)
-            validate(model, val_loader, criterion)
+            val_loss = validate(model, val_loader, criterion)
+
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                epochs_no_improve = 0
+                # Save the model
+                best_model_path= os.path.join(results_dir, f'best_model_fold_{fold}.pt')
+                torch.save(model.state_dict(), best_model_path)
+                print(f'Model saved: Improved validation loss to {best_val_loss}')
+            else:
+                epochs_no_improve += 1
+                print(f'No improvement in validation loss for {epochs_no_improve} epochs')
+
+            # Early stopping
+            if epochs_no_improve == patience:
+                print('Early stopping triggered')
+                break
 
         # 테스트 데이터에 대한 평가
-        test_accuracy = test(model, test_loader,fold)
+        model.load_state_dict(torch.load(best_model_path))
+        test_accuracy = test(model, test_loader,fold, split_file, results_dir)
 
         # 결과 출력 또는 저장
         print(f"Fold {fold}: Test Accuracy = {test_accuracy}")

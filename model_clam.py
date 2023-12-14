@@ -69,6 +69,24 @@ class MultiHeadAttention(nn.Module):
         return multi_head_feature, score
 
 
+class Attention(nn.Module):
+    def __init__(self, feature_dim, use_softmax=False):
+        super(Attention, self).__init__()
+        self.feature_dim = feature_dim
+        self.use_softmax = use_softmax
+        self.attention = nn.Linear(feature_dim, feature_dim) if use_softmax else nn.Linear(feature_dim, 1)
+
+    def forward(self, features):
+        attention_scores = self.attention(features)
+        if self.use_softmax:
+            attention_scores = torch.softmax(attention_scores, dim=1)
+        else:
+            attention_scores = torch.sigmoid(attention_scores)
+        attended_features = attention_scores * features
+        return attended_features
+
+
+
 
 
 
@@ -111,9 +129,9 @@ class CLAM_endo(nn.Module):
         instance_classifiers = [nn.Linear(size[1], 2) for i in range(n_classes)]
         self.instance_classifiers = nn.ModuleList(instance_classifiers)
         self.k_sample = k_sample
-        #config = BertConfig()
-        #self.transformer_encoder = BertModel(config)        
-        self.transformer_encoder = BertModel.from_pretrained('bert-base-uncased')
+        config = BertConfig()
+        self.transformer_encoder = BertModel(config)        
+        #self.transformer_encoder = BertModel.from_pretrained('bert-base-uncased')
         
         self.instance_loss_fn = instance_loss_fn
         self.n_classes = n_classes
@@ -123,7 +141,7 @@ class CLAM_endo(nn.Module):
         
 
     def relocate(self):
-        device=torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
+        device=torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
         self.attention_net = self.attention_net.to(device)
         self.classifiers = self.classifiers.to(device)
         self.instance_classifiers = self.instance_classifiers.to(device)
@@ -247,7 +265,6 @@ class CLAM_mre(nn.Module):
             attention_net = Attn_Net(L = size[1], D = size[2], dropout = dropout, n_classes = 1)
         fc.append(attention_net)
         self.attention_net = nn.Sequential(*fc)
-        self.attention_module=MultiHeadAttention(768, 49,1 )
         self.classifiers = nn.Linear(size[1], n_classes)
         instance_classifiers = [nn.Linear(size[1], 2) for i in range(n_classes)]
         self.instance_classifiers = nn.ModuleList(instance_classifiers)
@@ -260,7 +277,7 @@ class CLAM_mre(nn.Module):
 # )
         
 #         self.transformer_encoder = LongformerModel(config)  
-        self.transformer_encoder = LongformerModel.from_pretrained('allenai/longformer-base-4096')      
+        #self.transformer_encoder = LongformerModel.from_pretrained('allenai/longformer-base-4096')      
         #self.transformer_encoder = BertModel.from_pretrained('bert-base-uncased')
         
         self.instance_loss_fn = instance_loss_fn
@@ -271,7 +288,7 @@ class CLAM_mre(nn.Module):
         
 
     def relocate(self):
-        device=torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
+        device=torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
         self.attention_net = self.attention_net.to(device)
         self.classifiers = self.classifiers.to(device)
         self.instance_classifiers = self.instance_classifiers.to(device)
@@ -332,13 +349,8 @@ class CLAM_mre(nn.Module):
             return A
         A_raw = A
         A = F.softmax(A, dim=1)  # softmax over N
-        A_reshaped = A.squeeze(0).unsqueeze(1)  # [50, 1]
- 
-        
-
-        transformer_outputs = self.transformer_encoder(inputs_embeds=h.unsqueeze(0))[0]  # [1, k, hidden_size]
-        aggregated_output= transformer_outputs *  h   * A_reshaped
-        aggregated_output=aggregated_output.sum(dim=1)         
+        M = torch.mm(A, h)
+            
 
         if instance_eval:
             total_inst_loss = 0.0
@@ -375,7 +387,7 @@ class CLAM_mre(nn.Module):
 
        
 
-        return aggregated_output, A_raw, results_dict,  
+        return M, A_raw, results_dict,  
     
 
 
@@ -390,25 +402,28 @@ class MultimodalModel(nn.Module):
         self.classifier = nn.Sequential(
             nn.Linear(768*2+49,768),
             nn.ReLU(),
-            nn.Linear(768,512),
-            nn.ReLU(),
-            nn.Linear(512,256),
+            nn.Linear(768,256),
             nn.ReLU(),
             nn.Linear(256,2))
+        self.endo_attention = Attention(768, use_softmax=False)  # Assuming 768 is the feature dim for endo
+        self.mre_attention = Attention(768, use_softmax=False)  # Assuming 768 is the feature dim for MRE
+        self.tabular_attention = Attention(49, use_softmax=True) 
+         
 
     def forward(self, endo_data, mre_data, tabular_data, label=None):
         # endo
-
         endo_feat, A_raw_endo, results_dict_endo  = self.endo_model(endo_data, label=label)
-
+        endo_feat = self.endo_attention(endo_feat)
+        
         # MRE 
         mre_feat, A_raw_mre, results_dict_mre  = self.mre_model(mre_data, label=label)
-
-        # tabualr
-        tabular_features = tabular_data
+        mre_feat = self.mre_attention(mre_feat)
+        
+        # tabualr    
+        tabular_feat = self.tabular_attention(tabular_data)
 
         # fusion
-        combined_features = self.late_fusion(endo_feat, mre_feat, tabular_features)
+        combined_features = self.late_fusion(endo_feat, mre_feat, tabular_feat)
 
         # 최종 예측
         output = self.classifier(combined_features)
