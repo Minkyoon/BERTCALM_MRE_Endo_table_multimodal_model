@@ -1,6 +1,6 @@
 import torch
 from torch.nn.functional import softmax
-from model_clam import  MultimodalModel, CLAM_mre, CLAM_endo
+from model_clam_longbert import  MultimodalModel, CLAM_mre, CLAM_endo
 from torch.utils.data import Dataset, DataLoader
 from dataset import PTFilesDataset
 import os
@@ -15,8 +15,8 @@ import random
 
 
 
-num_epochs=2
-device='cuda:3'
+num_epochs=200
+device='cuda:2'
 
 def save_results_to_pkl(test_data, predict_proba, predicted, output_path):
     """
@@ -77,7 +77,7 @@ def train(model, train_loader, optimizer, criterion):
         
         bag_weight=1.7
         
-        total_loss = 1.7*loss + 0.3*instance_loss_endo + 0.3*instance_loss_mre
+        total_loss = 1*loss + 0.3*instance_loss_endo + 0.3*instance_loss_mre
         
 
         # 역전파
@@ -109,7 +109,7 @@ def validate(model, val_loader, criterion):
             instance_loss_mre = results_dict_mre['instance_loss']
 
             bag_weight = 0.7
-            total_loss += 1.7 * loss + 0.3 * instance_loss_endo + 0.3 * instance_loss_mre
+            total_loss += 1 * loss + 0.3 * instance_loss_endo + 0.3 * instance_loss_mre
 
     return total_loss / len(val_loader)
 
@@ -174,7 +174,7 @@ def test(model, test_loader, fold, split_file,  results_dir):
 
 def main():
     set_seeds(42)
-    folder_name = "learning_rate_0.0001_weight1.7"  # Replace with your desired folder name
+    folder_name = "longbert_learning_rate_0.0001_4096"  # Replace with your desired folder name
     results_dir = f'./results/{folder_name}'
 
     
@@ -216,7 +216,7 @@ def main():
 
         best_val_loss = float('inf')
         epochs_no_improve = 0
-        patience = 20  # Set your patience level
+        patience = 50  # Set your patience level
 
         for epoch in range(num_epochs):
             print(f'epoch:{epoch}')
