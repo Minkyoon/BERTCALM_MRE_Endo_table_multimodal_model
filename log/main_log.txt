@@ -1,0 +1,14 @@
+Setting tau to 1.0
+epoch:0
+Traceback (most recent call last):
+  File "main.py", line 250, in <module>
+    main()
+  File "main.py", line 223, in main
+    train(model, train_loader, optimizer, criterion)
+  File "main.py", line 85, in train
+    total_loss.backward()
+  File "/home/minkyoon/anaconda3/envs/clam2/lib/python3.7/site-packages/torch/_tensor.py", line 489, in backward
+    self, gradient, retain_graph, create_graph, inputs=inputs
+  File "/home/minkyoon/anaconda3/envs/clam2/lib/python3.7/site-packages/torch/autograd/__init__.py", line 199, in backward
+    allow_unreachable=True, accumulate_grad=True)  # Calls into the C++ engine to run the backward pass
+KeyboardInterrupt

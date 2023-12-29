@@ -1,12 +1,13 @@
 import torch
 from torch.nn.functional import softmax
-from model_clam_longbert import  MultimodalModel, CLAM_mre, CLAM_endo
+import torch.nn.functional as F
+from model_clam import  MultimodalModel, CLAM_mre, CLAM_endo
 from torch.utils.data import Dataset, DataLoader
 from dataset import PTFilesDataset
 import os
 import pandas as pd
 from utils.topk.svm import SmoothTop1SVM
-from utils.utils import set_seeds
+from utils.utils import set_seeds, FocalLoss
 from sklearn.metrics import confusion_matrix, f1_score, roc_auc_score, accuracy_score, precision_score, recall_score
 import numpy as np
 import pickle
@@ -16,7 +17,7 @@ import random
 
 
 num_epochs=200
-device='cuda:2'
+device='cuda:0'
 
 def save_results_to_pkl(test_data, predict_proba, predicted, output_path):
     """
@@ -63,12 +64,14 @@ def train(model, train_loader, optimizer, criterion):
         tabular_data=tabular_data.to(device)
         labels=labels.to(device)
         
-    
+        #focal loss 용
+        labels_one_hot = F.one_hot(labels, num_classes=2).float()
         
 
         # 모델 실행
         logits, results_dict_endo, results_dict_mre = model(endo_data, mre_data, tabular_data, label=labels)
-        loss = criterion(logits, labels)
+        #loss = criterion(logits, labels)
+        loss = criterion(logits, labels_one_hot)
         instance_loss_endo = results_dict_endo['instance_loss']
         instance_loss_mre = results_dict_mre['instance_loss']
         
@@ -77,7 +80,7 @@ def train(model, train_loader, optimizer, criterion):
         
         bag_weight=1.7
         
-        total_loss = 1*loss + 0.3*instance_loss_endo + 0.3*instance_loss_mre
+        total_loss = 1.7*loss + 0.3*instance_loss_endo + 0.3*instance_loss_mre
         
 
         # 역전파
@@ -101,15 +104,18 @@ def validate(model, val_loader, criterion):
             endo_data = endo_data.to(device)
             tabular_data = tabular_data.to(device)
             labels = labels.to(device)
+            #focal loss 용
+            labels_one_hot = F.one_hot(labels, num_classes=2).float()
 
             # 모델 실행
             logits, results_dict_endo, results_dict_mre = model(endo_data, mre_data, tabular_data, label=labels)
-            loss = criterion(logits, labels)
+            #loss = criterion(logits, labels)
+            loss = criterion(logits, labels_one_hot)
             instance_loss_endo = results_dict_endo['instance_loss']
             instance_loss_mre = results_dict_mre['instance_loss']
 
             bag_weight = 0.7
-            total_loss += 1 * loss + 0.3 * instance_loss_endo + 0.3 * instance_loss_mre
+            total_loss += 2 * loss 
 
     return total_loss / len(val_loader)
 
@@ -174,7 +180,7 @@ def test(model, test_loader, fold, split_file,  results_dir):
 
 def main():
     set_seeds(42)
-    folder_name = "longbert_learning_rate_0.0001_4096"  # Replace with your desired folder name
+    folder_name = "(a1pretrian)focalloss_longbert_learning_rate_0.0001_4096_weight_1.7"  # Replace with your desired folder name
     results_dir = f'./results/{folder_name}'
 
     
@@ -201,13 +207,16 @@ def main():
         test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
 
         # 모델 초기화
-        instance_loss_fn = SmoothTop1SVM(n_classes = 2)
+        focal_loss_fn = FocalLoss(alpha=1, gamma=2.0).to(device)
+        cross_loss_fn= torch.nn.CrossEntropyLoss().to(device)
+        instance_loss_fn = SmoothTop1SVM(n_classes = 2).to(device)
         endo_model = CLAM_endo()
         mre_model = CLAM_mre()   # MRE 이미지 모델
         model = MultimodalModel(endo_model=endo_model,mre_model=mre_model,instance_loss_fn=instance_loss_fn)
         model=model.to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
-        criterion = torch.nn.CrossEntropyLoss()
+        #criterion = torch.nn.CrossEntropyLoss()
+        criterion = cross_loss_fn
         
 
 
@@ -216,7 +225,7 @@ def main():
 
         best_val_loss = float('inf')
         epochs_no_improve = 0
-        patience = 50  # Set your patience level
+        patience = 30  # Set your patience level
 
         for epoch in range(num_epochs):
             print(f'epoch:{epoch}')

@@ -1,8 +1,0 @@
-Accuracy: 0.75
-Sensitivity: 0.3333333333333333
-Specificity: 0.8888888888888888
-F1 Score: 0.4
-Confusion Matrix: 
-[[8 1]
- [2 1]]
-ROC AUC Score: 0.611111111111111

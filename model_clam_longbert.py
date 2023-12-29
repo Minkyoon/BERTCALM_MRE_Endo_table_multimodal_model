@@ -130,8 +130,8 @@ class CLAM_endo(nn.Module):
         self.instance_classifiers = nn.ModuleList(instance_classifiers)
         self.k_sample = k_sample
         config = BertConfig()
-        self.transformer_encoder = BertModel(config)        
-        #self.transformer_encoder = BertModel.from_pretrained('bert-base-uncased')
+        #self.transformer_encoder = BertModel(config)        
+        self.transformer_encoder = BertModel.from_pretrained('bert-base-uncased')
         
         self.instance_loss_fn = instance_loss_fn
         self.n_classes = n_classes
@@ -141,7 +141,7 @@ class CLAM_endo(nn.Module):
         
 
     def relocate(self):
-        device=torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
+        device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.attention_net = self.attention_net.to(device)
         self.classifiers = self.classifiers.to(device)
         self.instance_classifiers = self.instance_classifiers.to(device)
@@ -172,10 +172,10 @@ class CLAM_endo(nn.Module):
         all_instances = torch.cat([top_p, top_n], dim=0)
         logits = classifier(all_instances)
         all_preds = torch.topk(logits, 1, dim = 1)[1].squeeze(1)
-        logits=logits.to('cpu')
-        all_targets=all_targets.to('cpu')
+        # logits=logits.to('cpu')
+        # all_targets=all_targets.to('cpu')
         instance_loss = self.instance_loss_fn(logits, all_targets)
-        instance_loss=instance_loss.to('cuda:2')
+        # instance_loss=instance_loss.to('cuda:2')
         return instance_loss, all_preds, all_targets
     
     #instance-level evaluation for out-of-the-class attention branch
@@ -188,10 +188,10 @@ class CLAM_endo(nn.Module):
         p_targets = self.create_negative_targets(self.k_sample, device)
         logits = classifier(top_p)
         p_preds = torch.topk(logits, 1, dim = 1)[1].squeeze(1)
-        logits=logits.to('cpu')
-        p_targets=p_targets.to('cpu')        
+        # logits=logits.to('cpu')
+        # p_targets=p_targets.to('cpu')        
         instance_loss = self.instance_loss_fn(logits, p_targets)
-        instance_loss=instance_loss.to('cuda:2')
+        # instance_loss=instance_loss.to('cuda:2')
         return instance_loss, p_preds, p_targets
 
     def forward(self, h,  label=None, instance_eval=True, return_features=False, attention_only=False):
@@ -275,8 +275,8 @@ class CLAM_mre(nn.Module):
 #          num_attention_heads=8,  # attention heads 수 감소
 #            num_hidden_layers=6,  # Transformer block 수 감소
             max_position_embeddings=4096)
-        self.transformer_encoder = LongformerModel(config)
-        #self.transformer_encoder = LongformerModel.from_pretrained('allenai/longformer-base-4096')  
+        #self.transformer_encoder = LongformerModel(config)
+        self.transformer_encoder = LongformerModel.from_pretrained('allenai/longformer-base-4096')  
 
         self.instance_loss_fn = instance_loss_fn
         self.n_classes = n_classes
@@ -286,7 +286,7 @@ class CLAM_mre(nn.Module):
         
 
     def relocate(self):
-        device=torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
+        device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.attention_net = self.attention_net.to(device)
         self.classifiers = self.classifiers.to(device)
         self.instance_classifiers = self.instance_classifiers.to(device)
@@ -317,10 +317,10 @@ class CLAM_mre(nn.Module):
         all_instances = torch.cat([top_p, top_n], dim=0)
         logits = classifier(all_instances)
         all_preds = torch.topk(logits, 1, dim = 1)[1].squeeze(1)
-        logits=logits.to('cpu')
-        all_targets=all_targets.to('cpu')
+        # logits=logits.to('cpu')
+        # all_targets=all_targets.to('cpu')
         instance_loss = self.instance_loss_fn(logits, all_targets)
-        instance_loss=instance_loss.to('cuda:2')
+        # instance_loss=instance_loss.to('cuda:2')
         return instance_loss, all_preds, all_targets
     
     #instance-level evaluation for out-of-the-class attention branch
@@ -333,10 +333,10 @@ class CLAM_mre(nn.Module):
         p_targets = self.create_negative_targets(self.k_sample, device)
         logits = classifier(top_p)
         p_preds = torch.topk(logits, 1, dim = 1)[1].squeeze(1)
-        logits=logits.to('cpu')
-        p_targets=p_targets.to('cpu')        
+        # logits=logits.to('cpu')
+        # p_targets=p_targets.to('cpu')        
         instance_loss = self.instance_loss_fn(logits, p_targets)
-        instance_loss=instance_loss.to('cuda:2')
+        # instance_loss=instance_loss.to('cuda:2')
         return instance_loss, p_preds, p_targets
 
     def forward(self, h, label=None, instance_eval=True, return_features=False, attention_only=False):

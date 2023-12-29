@@ -129,9 +129,9 @@ class CLAM_endo(nn.Module):
         instance_classifiers = [nn.Linear(size[1], 2) for i in range(n_classes)]
         self.instance_classifiers = nn.ModuleList(instance_classifiers)
         self.k_sample = k_sample
-        config = BertConfig()
-        self.transformer_encoder = BertModel(config)        
-        #self.transformer_encoder = BertModel.from_pretrained('bert-base-uncased')
+        #config = BertConfig()
+        #self.transformer_encoder = BertModel(config)        
+        self.transformer_encoder = BertModel.from_pretrained('bert-base-uncased')
         
         self.instance_loss_fn = instance_loss_fn
         self.n_classes = n_classes
@@ -172,10 +172,7 @@ class CLAM_endo(nn.Module):
         all_instances = torch.cat([top_p, top_n], dim=0)
         logits = classifier(all_instances)
         all_preds = torch.topk(logits, 1, dim = 1)[1].squeeze(1)
-        logits=logits.to('cpu')
-        all_targets=all_targets.to('cpu')
         instance_loss = self.instance_loss_fn(logits, all_targets)
-        instance_loss=instance_loss.to('cuda:3')
         return instance_loss, all_preds, all_targets
     
     #instance-level evaluation for out-of-the-class attention branch
@@ -187,11 +184,8 @@ class CLAM_endo(nn.Module):
         top_p = torch.index_select(h, dim=0, index=top_p_ids)
         p_targets = self.create_negative_targets(self.k_sample, device)
         logits = classifier(top_p)
-        p_preds = torch.topk(logits, 1, dim = 1)[1].squeeze(1)
-        logits=logits.to('cpu')
-        p_targets=p_targets.to('cpu')        
+        p_preds = torch.topk(logits, 1, dim = 1)[1].squeeze(1)       
         instance_loss = self.instance_loss_fn(logits, p_targets)
-        instance_loss=instance_loss.to('cuda:3')
         return instance_loss, p_preds, p_targets
 
     def forward(self, h,  label=None, instance_eval=True, return_features=False, attention_only=False):
@@ -319,10 +313,7 @@ class CLAM_mre(nn.Module):
         all_instances = torch.cat([top_p, top_n], dim=0)
         logits = classifier(all_instances)
         all_preds = torch.topk(logits, 1, dim = 1)[1].squeeze(1)
-        logits=logits.to('cpu')
-        all_targets=all_targets.to('cpu')
         instance_loss = self.instance_loss_fn(logits, all_targets)
-        instance_loss=instance_loss.to('cuda:3')
         return instance_loss, all_preds, all_targets
     
     #instance-level evaluation for out-of-the-class attention branch
@@ -334,11 +325,8 @@ class CLAM_mre(nn.Module):
         top_p = torch.index_select(h, dim=0, index=top_p_ids)
         p_targets = self.create_negative_targets(self.k_sample, device)
         logits = classifier(top_p)
-        p_preds = torch.topk(logits, 1, dim = 1)[1].squeeze(1)
-        logits=logits.to('cpu')
-        p_targets=p_targets.to('cpu')        
+        p_preds = torch.topk(logits, 1, dim = 1)[1].squeeze(1)  
         instance_loss = self.instance_loss_fn(logits, p_targets)
-        instance_loss=instance_loss.to('cuda:3')
         return instance_loss, p_preds, p_targets
 
     def forward(self, h, label=None, instance_eval=True, return_features=False, attention_only=False):

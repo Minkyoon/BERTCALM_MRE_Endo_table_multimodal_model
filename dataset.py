@@ -51,8 +51,8 @@ class PTFilesDataset(Dataset):
             mre_id = self.mre_endo_match[slide_id]
             mre_file_path = os.path.join(self.mre_directory, f"{mre_id}.pt")
             mre_data = torch.load(mre_file_path)
-        else:
-            mre_data = torch.zeros_like(data)  # 또는 적절한 기본값
+        # else:
+        #     mre_data = torch.zeros_like(data)  # 또는 적절한 기본값
         
         # slide_id 제거를위애 마지막열 제거    
         #tabular_features = self.tabular_data.loc[slide_id].iloc[:-1].values
