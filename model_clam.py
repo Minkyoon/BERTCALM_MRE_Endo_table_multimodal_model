@@ -388,11 +388,20 @@ class MultimodalModel(nn.Module):
         self.endo_model = endo_model
         self.mre_model = mre_model
         self.classifier = nn.Sequential(
-            nn.Linear(768*2+49,768),
+            nn.Linear(768*2+49, 768),
             nn.ReLU(),
-            nn.Linear(768,256),
+            nn.Dropout(p=0.5), 
+            nn.Linear(768, 512),
             nn.ReLU(),
-            nn.Linear(256,2))
+            nn.Dropout(p=0.5), 
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Dropout(p=0.5), 
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Dropout(p=0.5),  
+            nn.Linear(128, 2),
+        )
         self.endo_attention = Attention(768, use_softmax=False)  # Assuming 768 is the feature dim for endo
         self.mre_attention = Attention(768, use_softmax=False)  # Assuming 768 is the feature dim for MRE
         self.tabular_attention = Attention(49, use_softmax=True) 

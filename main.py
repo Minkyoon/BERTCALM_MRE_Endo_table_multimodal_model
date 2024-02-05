@@ -3,7 +3,7 @@ from torch.nn.functional import softmax
 import torch.nn.functional as F
 from model_clam import  MultimodalModel, CLAM_mre, CLAM_endo
 from torch.utils.data import Dataset, DataLoader
-from dataset import PTFilesDataset
+from dataset import *
 import os
 import pandas as pd
 from utils.topk.svm import SmoothTop1SVM
@@ -80,7 +80,7 @@ def train(model, train_loader, optimizer, criterion):
         
         bag_weight=1.7
         
-        total_loss = 1.7*loss + 0.3*instance_loss_endo + 0.3*instance_loss_mre
+        total_loss = 1.7*loss + 1*instance_loss_endo + 1*instance_loss_mre
         
 
         # 역전파
@@ -115,7 +115,7 @@ def validate(model, val_loader, criterion):
             instance_loss_mre = results_dict_mre['instance_loss']
 
             bag_weight = 0.7
-            total_loss += 2 * loss 
+            total_loss +=1.7*loss + 1*instance_loss_endo + 1*instance_loss_mre
 
     return total_loss / len(val_loader)
 
@@ -180,8 +180,8 @@ def test(model, test_loader, fold, split_file,  results_dir):
 
 def main():
     set_seeds(42)
-    folder_name = "(a1pretrian)focalloss_longbert_learning_rate_0.0001_4096_weight_1.7"  # Replace with your desired folder name
-    results_dir = f'./results/{folder_name}'
+    folder_name = "valid_mlp+0.001lr_bag1.7_instance1_weigted_sample_pretrained”"  # Replace with your desired folder name
+    results_dir = f'./result_main/{folder_name}'
 
     
 
@@ -202,7 +202,8 @@ def main():
         )
 
         # 데이터 로더 설정
-        train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True)
+        train_loader = get_split_loader(train_dataset, training=True, weighted=True)
+        #train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True)
         val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False)
         test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
 
@@ -214,7 +215,7 @@ def main():
         mre_model = CLAM_mre()   # MRE 이미지 모델
         model = MultimodalModel(endo_model=endo_model,mre_model=mre_model,instance_loss_fn=instance_loss_fn)
         model=model.to(device)
-        optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
+        optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
         #criterion = torch.nn.CrossEntropyLoss()
         criterion = cross_loss_fn
         

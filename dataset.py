@@ -1,4 +1,4 @@
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset,  DataLoader, WeightedRandomSampler
 import pandas as pd
 import torch
 import os
@@ -26,6 +26,7 @@ class PTFilesDataset(Dataset):
         self.tabular_data.fillna(0, inplace=True)
         self.ids = ids
         self.mre_directory = mre_directory
+        self.slide_cls_ids = self._get_class_counts()
         if mre_endo_csv:
             self.mre_endo_match = match_mre_endo(mre_endo_csv)
         else:
@@ -35,6 +36,24 @@ class PTFilesDataset(Dataset):
         if self.ids is not None:
             return len(self.ids)
         return len(os.listdir(self.pt_directory))
+
+    def getlabel(self, idx):
+        if self.ids is not None:
+            slide_id = self.ids[idx]
+        else:
+            file_name = os.listdir(self.pt_directory)[idx]
+            slide_id = int(file_name.split('.')[0])
+        return self.labels.loc[slide_id, "label"]
+
+    def _get_class_counts(self):
+        class_counts = {}
+        for idx in range(len(self.labels)):
+            label = self.labels.iloc[idx]['label']
+            if label in class_counts:
+                class_counts[label] += 1
+            else:
+                class_counts[label] = 1
+        return class_counts
 
     def __getitem__(self, idx):
         if self.ids is not None:
@@ -62,3 +81,27 @@ class PTFilesDataset(Dataset):
         return data, mre_data, tabular_features, label
 
     
+
+
+def make_weights_for_balanced_classes(dataset):
+    N = float(len(dataset))
+    weight_per_class = [N / dataset.slide_cls_ids[c] for c in dataset.slide_cls_ids]
+    weight = [0] * int(N)
+    for idx in range(len(dataset)):
+        y = dataset.getlabel(idx)
+        weight[idx] = weight_per_class[y]
+    return torch.DoubleTensor(weight)
+
+def get_split_loader(split_dataset, training=False, weighted=False):
+    kwargs = {'num_workers': 4} if torch.cuda.is_available() else {}
+    if training:
+        if weighted:
+            weights = make_weights_for_balanced_classes(split_dataset)
+            sampler = WeightedRandomSampler(weights, len(weights))
+        else:
+            sampler = torch.utils.data.RandomSampler(split_dataset)
+    else:
+        sampler = torch.utils.data.SequentialSampler(split_dataset)
+
+    loader = DataLoader(split_dataset, batch_size=1, sampler=sampler)
+    return loader

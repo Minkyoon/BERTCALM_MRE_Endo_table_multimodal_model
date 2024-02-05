@@ -406,6 +406,8 @@ class MultimodalModel(nn.Module):
             nn.ReLU(),
             nn.Linear(768,256),
             nn.ReLU(),
+            nn.Linear(512,256),
+            nn.ReLU(),
             nn.Linear(256,2))
         self.endo_attention = Attention(768, use_softmax=False)  # Assuming 768 is the feature dim for endo
         self.mre_attention = Attention(768, use_softmax=False)  # Assuming 768 is the feature dim for MRE
